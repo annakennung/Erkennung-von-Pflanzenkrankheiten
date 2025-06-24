@@ -25,7 +25,7 @@ test_dir = '/content/drive/MyDrive/Colab Notebooks/Archive/test'
 #for advance ments over 60% 128 is pretty necessary
 batch_size = 128
 #70 epochs seem to be enough to converge, as we have a pretty big NN, we should try to limit epoch and batch_size
-EPOCHS = 50
+EPOCHS = 10
 
 #learning rate set to 0.0001 to prevent oscillating
 optimizer = keras.optimizers.Adam(learning_rate=0.0001)
