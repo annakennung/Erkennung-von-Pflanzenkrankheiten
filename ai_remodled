@@ -1,0 +1,140 @@
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+import keras.optimizers
+import keras.losses
+from keras import layers
+from keras import Model
+from keras.optimizers import RMSprop
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import EarlyStopping
+import matplotlib.pyplot as plt
+import os
+
+# Definieren der Bildgröße und der Anzahl der Klassen
+IMG_HEIGHT = 256
+IMG_WIDTH = 256
+NUM_CLASSES = 38
+
+# Pfade zu den Datensätzen (Beispielpfade - bitte anpassen)
+train_dir = '/content/drive/MyDrive/Colab Notebooks/Archive/New Plant Diseases Dataset(Augmented)/New Plant Diseases Dataset(Augmented)/train'
+validation_dir = '/content/drive/MyDrive/Colab Notebooks/Archive/New Plant Diseases Dataset(Augmented)/New Plant Diseases Dataset(Augmented)/valid'
+test_dir = '/content/drive/MyDrive/Colab Notebooks/Archive/test'
+
+#batch size of 128 should be enough as we only have 7 categories, with 64 quite a bit of oscillation happened
+#for advance ments over 60% 128 is pretty necessary
+batch_size = 128
+#70 epochs seem to be enough to converge, as we have a pretty big NN, we should try to limit epoch and batch_size
+EPOCHS = 50
+
+#learning rate set to 0.0001 to prevent oscillating
+optimizer = keras.optimizers.Adam(learning_rate=0.0001)
+loss = keras.losses.CategoricalCrossentropy(from_logits=True)
+
+early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
+
+# Überprüfen, ob die Verzeichnisse existieren (optional, aber empfohlen)
+if not os.path.exists(train_dir):
+    print(f"Fehler: Trainingsverzeichnis nicht gefunden: {train_dir}")
+    # Hier können Sie eine Fehlermeldung ausgeben oder den Code beenden
+    exit()
+if not os.path.exists(validation_dir):
+    print(f"Fehler: Validierungsverzeichnis nicht gefunden: {validation_dir}")
+    exit()
+if not os.path.exists(test_dir):
+    print(f"Fehler: Testverzeichnis nicht gefunden: {test_dir}")
+    exit()
+
+#For Data Augmentation
+train_image_generator = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=40,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    fill_mode='nearest'
+)
+
+validation_image_generator = ImageDataGenerator(rescale=1./255)
+test_image_generator = ImageDataGenerator(rescale=1./255)
+
+#No augmentation on validator
+train_data_gen = train_image_generator.flow_from_directory(
+    directory=train_dir,
+    target_size=(IMG_HEIGHT, IMG_WIDTH),
+    batch_size=32,
+    class_mode='categorical'
+)
+
+val_data_gen = validation_image_generator.flow_from_directory(
+    directory=validation_dir,
+    target_size=(IMG_HEIGHT, IMG_WIDTH),
+    batch_size=32,
+    class_mode='categorical'
+)
+
+test_data_gen = test_image_generator.flow_from_directory(
+    directory=test_dir,
+    target_size=(IMG_HEIGHT, IMG_WIDTH),
+    batch_size=32,
+    class_mode='categorical',
+    shuffle=False # Kein Shuffling für die Testauswertung
+)
+
+# if smaller than 4 layers, NN converge to <60%
+model = tf.keras.Sequential([
+    layers.Conv2D(64, (3, 3), activation='relu', input_shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
+    layers.MaxPooling2D((2, 2)),
+    layers.Conv2D(128, (3, 3), activation='relu'),
+    layers.MaxPooling2D((2, 2)),
+    layers.Conv2D(256, (3, 3), activation='relu'),
+    layers.MaxPooling2D((2, 2)),
+    layers.Conv2D(512, (3, 3), activation='relu'),
+    layers.MaxPooling2D((2, 2)),
+    layers.Flatten(),
+    layers.Dense(1024, activation='relu'),
+    #added dropout to prevent overfitting
+    layers.Dropout(0.3),
+    layers.Dense(NUM_CLASSES, activation='softmax')
+])
+
+model.compile(loss= loss,
+              optimizer= optimizer,
+              metrics=['accuracy'])
+
+history = model.fit(
+    x = train_data_gen,
+    epochs=EPOCHS,
+    batch_size=batch_size,
+    validation_data = val_data_gen,
+    callbacks=[early_stop]
+)
+
+
+# Retrieve a list of accuracy results on training and validation data
+# sets for each training epoch
+acc = history.history['accuracy']
+val_acc = history.history['val_accuracy']
+
+# Retrieve a list of list results on training and validation data
+# sets for each training epoch
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+
+# Get number of epochs
+epochs = range(len(acc))
+
+# Plot training and validation accuracy per epoch
+plt.plot(epochs, acc)
+plt.plot(epochs, val_acc)
+plt.title('Training and validation accuracy')
+
+plt.figure()
+
+# Plot training and validation loss per epoch
+plt.plot(epochs, loss)
+plt.plot(epochs, val_loss)
+plt.title('Training and validation loss')
