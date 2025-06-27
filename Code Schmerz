@@ -1,0 +1,132 @@
+# Notwendige Bibliotheken importieren
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+import matplotlib.pyplot as plt
+import os
+
+# Definieren der Bildgröße und der Anzahl der Klassen
+IMG_HEIGHT = 256
+IMG_WIDTH = 256
+NUM_CLASSES = 38
+
+# Pfade zu den Datensätzen (Beispielpfade - bitte anpassen)
+train_dir = '/content/drive/MyDrive/Colab Notebooks/Archiv/New Plant Diseases Dataset(Augmented)/New Plant Diseases Dataset(Augmented)/train'
+validation_dir = '/content/drive/MyDrive/Colab Notebooks/Archiv/New Plant Diseases Dataset(Augmented)/New Plant Diseases Dataset(Augmented)/valid'
+test_dir = '/content/drive/MyDrive/Colab Notebooks/Archiv/test'
+
+# Überprüfen, ob die Verzeichnisse existieren (optional, aber empfohlen)
+if not os.path.exists(train_dir):
+    print(f"Fehler: Trainingsverzeichnis nicht gefunden: {train_dir}")
+    # Hier können Sie eine Fehlermeldung ausgeben oder den Code beenden
+    exit()
+if not os.path.exists(validation_dir):
+    print(f"Fehler: Validierungsverzeichnis nicht gefunden: {validation_dir}")
+    exit()
+if not os.path.exists(test_dir):
+    print(f"Fehler: Testverzeichnis nicht gefunden: {test_dir}")
+    exit()
+
+
+# Bilddaten-Generatoren erstellen
+# Für das Training: Augmentierung kann hilfreich sein
+##train_image_generator = ImageDataGenerator(
+##    rescale=1./255,
+##    rotation_range=40,
+##    width_shift_range=0.2,
+##    height_shift_range=0.2,
+##    shear_range=0.2,
+##   zoom_range=0.2,
+##   horizontal_flip=True,
+##   fill_mode='nearest'
+##)
+
+# Für Validierung und Test: Nur Rescaling
+train_image_generator = ImageDataGenerator(rescale=1./255)
+validation_image_generator = ImageDataGenerator(rescale=1./255)
+test_image_generator = ImageDataGenerator(rescale=1./255)
+
+# Datenströme von Verzeichnissen erstellen
+train_data_gen = train_image_generator.flow_from_directory(
+    directory=train_dir,
+    target_size=(IMG_HEIGHT, IMG_WIDTH),
+    batch_size=32, # Batch-Größe anpassen, falls nötig
+    class_mode='categorical'
+)
+
+val_data_gen = validation_image_generator.flow_from_directory(
+    directory=validation_dir,
+    target_size=(IMG_HEIGHT, IMG_WIDTH),
+    batch_size=32,
+    class_mode='categorical'
+)
+
+test_data_gen = test_image_generator.flow_from_directory(
+    directory=test_dir,
+    target_size=(IMG_HEIGHT, IMG_WIDTH),
+    batch_size=32,
+    class_mode='categorical',
+    shuffle=False # Kein Shuffling für die Testauswertung
+)
+
+# Konfiguration des Modells
+model = Sequential([
+    Conv2D(32, (3, 3), activation='relu', input_shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
+    MaxPooling2D(2, 2),
+    Conv2D(64, (3, 3), activation='relu'),
+    MaxPooling2D(2, 2),
+#    Conv2D(128, (3, 3), activation='relu'),
+#    MaxPooling2D(2, 2),
+#    Conv2D(128, (3, 3), activation='relu'),
+#    MaxPooling2D(2, 2),
+#    Conv2D(38, (3, 3), activation='relu'),
+#    MaxPooling2D(2, 2),
+    Flatten(),
+    Dropout(0.5), # Dropout zur Vermeidung von Overfitting
+    Dense(512, activation='relu'),
+    Dense(NUM_CLASSES, activation='softmax') # Softmax für Multiklassen-Klassifizierung
+])
+
+# Modell kompilieren
+model.compile(optimizer='adam',
+              loss='categorical_crossentropy',
+              metrics=['accuracy'])
+
+# Modell trainieren
+EPOCHS = 10 # Anzahl der Epochen anpassen => erstmal 2 Epochen zum testen
+history = model.fit(
+    train_data_gen,
+    steps_per_epoch=train_data_gen.samples // train_data_gen.batch_size,
+    epochs=EPOCHS,
+    validation_data=val_data_gen,
+    validation_steps=val_data_gen.samples // val_data_gen.batch_size
+)
+
+# Modell auf dem Testdatensatz evaluieren
+print("Modell auf dem Testdatensatz evaluieren...")
+test_loss, test_acc = model.evaluate(test_data_gen)
+print(f'Test-Genauigkeit: {test_acc}')
+
+# Graphische Darstellung der Trainingsentwicklung
+acc = history.history['accuracy']
+val_acc = history.history['val_accuracy']
+
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+
+epochs_range = range(EPOCHS)
+
+plt.figure(figsize=(8, 8))
+plt.subplot(1, 2, 1)
+plt.plot(epochs_range, acc, label='Training Accuracy')
+plt.plot(epochs_range, val_acc, label='Validation Accuracy')
+plt.legend(loc='lower right')
+plt.title('Training and Validation Accuracy')
+
+plt.subplot(1, 2, 2)
+plt.plot(epochs_range, loss, label='Training Loss')
+plt.plot(epochs_range, val_loss, label='Validation Loss')
+plt.legend(loc='upper right')
+plt.title('Training and Validation Loss')
+plt.show()
